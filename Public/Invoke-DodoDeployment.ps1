@@ -18,7 +18,10 @@ function Invoke-DodoDeployment {
   [CmdletBinding()]
   param(
     [Parameter(Mandatory = $true)]
-      [string[]]$FileList
+      [string[]]$FileList,
+      [string]$Environment,
+      [string]$Group,
+      [bool]$SkipConfirmation
   )
   try {
 
@@ -27,13 +30,20 @@ function Invoke-DodoDeployment {
     $successBackgroundColor = "DarkGreen";
     $failureBackgroundColor = "DarkRed";
     
-    $environments = Get-DatabaseInstances | Select-Object -Property EnvironmentName -Unique | Sort-Object -Property EnvironmentName | ForEach-Object {"$($_.EnvironmentName)"};
-    $environment = Get-UserInputFromList -ValueList $environments;
+    
+    if ($Environment.Length -eq 0)
+    {
+      $environments = Get-DatabaseInstances | Select-Object -Property EnvironmentName -Unique | Sort-Object -Property EnvironmentName | ForEach-Object {"$($_.EnvironmentName)"};
+      $Environment = Get-UserInputFromList -ValueList $environments;
+    }
 
-    $groups = Get-DatabaseInstances | Select-Object -Property GroupName -Unique | Sort-Object -Property GroupName | ForEach-Object {"$($_.GroupName)"};
-    $group = Get-UserInputFromList -ValueList $groups;
+    if ($Group.Length -eq 0)
+    {
+      $groups = Get-DatabaseInstances | Select-Object -Property GroupName -Unique | Sort-Object -Property GroupName | ForEach-Object {"$($_.GroupName)"};
+      $Group = Get-UserInputFromList -ValueList $groups;
+    }
 
-    $instances = Get-DatabaseInstances -EnvironmentNameFilter $environment -GroupNameFilter $group;
+    $instances = Get-DatabaseInstances -EnvironmentNameFilter $Environment -GroupNameFilter $Group;
 
     if($instances.Count -eq 0)
     {
@@ -46,13 +56,16 @@ function Invoke-DodoDeployment {
       $instanceList = $instances | Select-Object -Property DisplayName -Unique | Sort-Object -Property DisplayName | ForEach-Object {"$($_.DisplayName)"};
       Write-ListOutput -Message "to the following server(s)" -ValueList $instanceList;
 
-      $msg = 'Do you want to proceed? (y/n)'
-      do {
-          $response = Read-Host -Prompt $msg
-          if ($response -eq 'n') {
-            exit;
-          }
-      } until ($response -eq 'y')
+      if (-not $SkipConfirmation)
+      {
+        $msg = 'Do you want to proceed? (y/n)'
+        do {
+            $response = Read-Host -Prompt $msg
+            if ($response -eq 'n') {
+              exit;
+            }
+        } until ($response -eq 'y')
+      }
             
       foreach($instance in $instances)
       {
@@ -69,11 +82,11 @@ function Invoke-DodoDeployment {
           $contextFileName = $file;
           if ($instance.ConnectionString -ne "")
           {
-            $output = Invoke-Sqlcmd2 -SQLConnection $instance.ConnectionString -InputFile $file;
+            $output = Invoke-DodoSqlcmd2 -SQLConnection $instance.ConnectionString -InputFile $file;
           }
           else
           {
-            $output = Invoke-Sqlcmd2 -ServerInstance $instance.InstanceName -Database $instance.DatabaseName -InputFile $file -Credential $Credential;
+            $output = Invoke-DodoSqlcmd2 -ServerInstance $instance.InstanceName -Database $instance.DatabaseName -InputFile $file -Credential $Credential;
           }
           $contextFileName = "";
         }
@@ -85,8 +98,8 @@ function Invoke-DodoDeployment {
       Write-ListOutput -Message "The following file(s) were successfully deployed" -ValueList $filelist;
     }
 
-    Write-Host -NoNewLine 'Press any key to continue...';
-    $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown');
+    #Write-Host -NoNewLine 'Press any key to continue...';
+    #$null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown');
     
   }
   catch
@@ -101,7 +114,5 @@ function Invoke-DodoDeployment {
     {
       Write-Host "FileName: $contextFileName" -ForegroundColor $failureForegroundColor -BackgroundColor $failureBackgroundColor;
     }
-    Write-Host -NoNewLine 'Press any key to continue...';
-    $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown');
   }
 } 

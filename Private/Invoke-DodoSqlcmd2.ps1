@@ -1,4 +1,4 @@
-function Invoke-Sqlcmd2 {
+function Invoke-DodoSqlcmd2 {
   <#
       .SYNOPSIS
           Runs a T-SQL script.
